@@ -4,7 +4,16 @@ The user has authorized **no paid resources**. The included Blueprint requests `
 
 ## Current publishing state
 
-The local Next.js build is verified. The public repository is https://github.com/silentmaster0610/proofpilot. The application source and MIT license are published. A Turso Free database named `proofpilot` exists in Mumbai, with a database-specific 90-day token. Render deployment is pending; it has not been claimed as live. The old ChatGPT Site is a separate earlier version and does not contain these updates.
+The local Next.js build is verified. The public repository is https://github.com/silentmaster0610/proofpilot. The application source and MIT license are published. A Turso Free database named `proofpilot` exists in Mumbai, with a database-specific 90-day token. The free Render service is https://proofpilot-5ij0.onrender.com. Its production build succeeded and Render reports the process live; database secret import and end-to-end verification remain pending. The old ChatGPT Site is a separate earlier version and does not contain these updates.
+
+### Finish the existing deployment
+
+1. Open [the ProofPilot Render service](https://dashboard.render.com/web/srv-dbclk68m7kps73c4viog), then **Environment → Add from .env**.
+2. Copy the locally prepared, ignored `.env.render-upload` file into that field. This includes the database credential and separate generated owner/judge keys. Never send this file in chat or publish it. Import/overwrite matching environment variables and choose **Save and deploy**. No rebuild is needed for these runtime values.
+3. In the service's Settings, set **Health Check Path** to `/api/health`. The connector-created service initially uses Render's default TCP health check; a running process alone does not confirm database access.
+4. Complete the verification below before advertising the URL as a working demo.
+
+Dashboard browser access was denied by its saved permission gate, so the private import requires the owner's action. The secrets were not printed in tool output. Follow Render's [environment import documentation](https://render.com/docs/configure-environment-variables).
 
 ## 1. Public source repository
 
@@ -32,7 +41,11 @@ Use Aditya's workspace (already selected by the owner). Connect the new public G
 | Health path | `/api/health` |
 | Node | `24.19.0` |
 
-Set `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `REQUIRE_REMOTE_DB=true`, `FOLLOWUP_SCANNER=true`. Generate strong random owner/judge keys (at least 32 characters) in `PROOFPILOT_OWNER_KEY` and `PROOFPILOT_JUDGE_KEY`. The Blueprint generates them automatically. Do not reuse local development keys in public hosting.
+Set `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `REQUIRE_REMOTE_DB=true`, `FOLLOWUP_SCANNER=true`. Users create their accounts on `/login` with an 8-character-or-longer password. `PROOFPILOT_OWNER_KEY` and `PROOFPILOT_JUDGE_KEY` are optional legacy/invitation credentials; the Blueprint generates them automatically. Do not reuse local development keys in public hosting. Existing owner data can be linked to an email/password account only by proving possession of its existing key.
+
+### Database authentication troubleshooting
+
+On 22 October, Render logs showed libSQL HTTP 401 during sign-in. A read-only `SELECT 1` using the privately saved Turso token succeeded, isolating the problem to the deployed database configuration. Copy only the token value (without `TURSO_AUTH_TOKEN=`) into Render's environment field and choose **Save and deploy**. The locally ignored `.env.turso-token.txt` contains just that verified token for easy copying. Never commit it or paste it into chat. The new sign-in handler returns a readable JSON error when storage is unavailable, and the page handles empty upstream responses.
 
 Leave `NEBIUS_API_KEY` unset for this sample-only release. The Blueprint intentionally does not require it. The model default is configured for later use. Render supplies `RENDER_EXTERNAL_URL`; set `APP_URL` only when using a different canonical domain.
 

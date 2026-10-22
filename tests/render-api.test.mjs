@@ -1,16 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
 import {mkdir,rm} from 'node:fs/promises';
 import {resolve,relative,isAbsolute} from 'node:path';
 import {createServer} from 'node:net';
+import {createServer as createHttpServer} from 'node:http';
+import {createClient} from '@libsql/client';
+import {build} from 'esbuild';
 const port=await new Promise(resolve=>{const s=createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
 const base=`http://127.0.0.1:${port}`,ownerKey=randomBytes(32).toString('hex');
 const stateDir=resolve('.test-state',crypto.randomUUID());
 await mkdir(stateDir,{recursive:true});
-const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{env:{...process.env,APP_URL:base,DATABASE_PATH:resolve(stateDir,'qa.sqlite'),TURSO_DATABASE_URL:'',TURSO_AUTH_TOKEN:'',REQUIRE_REMOTE_DB:'false',NEBIUS_API_KEY:'',PROOFPILOT_OWNER_KEY:ownerKey,PROOFPILOT_JUDGE_KEY:'',FOLLOWUP_SCANNER:'false',NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
-let logs='';server.stdout.on('data',c=>logs+=c);server.stderr.on('data',c=>logs+=c);
+const serverEnv={...process.env,APP_URL:base,DATABASE_PATH:resolve(stateDir,'qa.sqlite'),TURSO_DATABASE_URL:'',TURSO_AUTH_TOKEN:'',REQUIRE_REMOTE_DB:'false',NEBIUS_API_KEY:'',PROOFPILOT_OWNER_KEY:ownerKey,PROOFPILOT_JUDGE_KEY:'',FOLLOWUP_SCANNER:'false',NEXT_TELEMETRY_DISABLED:'1'};
+let logs='';
+function startServer(overrides={}) {
+  const child=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{env:{...serverEnv,...overrides},stdio:['ignore','pipe','pipe']});
+  child.stdout.on('data',c=>logs+=c);child.stderr.on('data',c=>logs+=c);return child;
+}
+let server=startServer();
+const inspection=createClient({url:`file:${resolve(stateDir,'qa.sqlite').replace(/\\/g,'/')}`});
+async function stopServer(){if(server.exitCode===null&&server.signalCode===null){const exited=new Promise(r=>server.once('exit',r));server.kill();await exited;}}
+async function waitForServer(path='/api/health') {
+  for(let i=0;i<60;i++){try{const r=await fetch(base+path);if(r.ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}
+  assert.fail('Server did not become ready: '+logs.slice(-3000));
+}
 let ownerCookie='',guestCookie='';
 async function req(path,body,cookie=ownerCookie,options={}){
   const r=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',Origin:base,Cookie:cookie,...options.headers},...(body===undefined?{}:{body:JSON.stringify(body)}),...options,signal:AbortSignal.timeout(15000)});
@@ -18,10 +32,8 @@ async function req(path,body,cookie=ownerCookie,options={}){
 }
 const post=payload=>req('/api/workspace',payload);
 test('Render server: sessions, evidence and approvals',async t=>{
-  t.after(async()=>{if(server.exitCode===null){const exited=new Promise(r=>server.once('exit',r));server.kill();await exited;}const child=relative(resolve('.test-state'),stateDir);assert.ok(child&&!child.startsWith('..')&&!isAbsolute(child));await rm(stateDir,{recursive:true,force:true});});
-  let started=false;
-  for(let i=0;i<60;i++){try{const r=await fetch(base+'/api/health');if(r.ok){started=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
-  assert.ok(started,'Server did not become healthy: '+logs.slice(-3000));
+  t.after(async()=>{await stopServer();inspection.close();const child=relative(resolve('.test-state'),stateDir);assert.ok(child&&!child.startsWith('..')&&!isAbsolute(child));await rm(stateDir,{recursive:true,force:true});});
+  await waitForServer();
   await t.test('anonymous and forged Sites headers cannot access private data',async()=>{
     assert.equal((await req('/api/workspace',undefined,'')).r.status,401);
     assert.equal((await req('/api/workspace',undefined,'',{headers:{'oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.test'}})).r.status,401);
@@ -91,5 +103,85 @@ test('Render server: sessions, evidence and approvals',async t=>{
   await t.test('logout revokes server session',async()=>{
     const r=await fetch(base+'/api/session',{method:'DELETE',headers:{Origin:base,Cookie:ownerCookie}});assert.equal(r.status,200);
     assert.equal((await req('/api/workspace')).r.status,401);
+  });
+  const signup={action:'signup',name:'First user',email:'first@example.test',password:'eight123',confirmPassword:'eight123'};
+  let accountCookie='',accountId;
+  const signout=cookie=>fetch(base+'/api/session',{method:'DELETE',headers:{Origin:base,Cookie:cookie}});
+  await t.test('signup validates eight-character minimum, email, confirmation and origin',async()=>{
+    for(const change of [{password:'seven12',confirmPassword:'seven12'},{confirmPassword:'different'},{email:'invalid'},{name:'   '},{password:'x'.repeat(129),confirmPassword:'x'.repeat(129)}]) {
+      assert.equal((await req('/api/session',{...signup,...change},'')).r.status,400);
+    }
+    assert.equal((await req('/api/session',signup,'',{headers:{Origin:'https://wrong.example'}})).r.status,403);
+  });
+  await t.test('first account accepts exactly eight characters without taking owner data',async()=>{
+    const {r,data}=await req('/api/session',{...signup,userId:'owner',role:'owner'},'');
+    assert.equal(r.status,200);assert.deepEqual(data,{ok:true});
+    const c=r.headers.get('set-cookie');assert.match(c,/HttpOnly/i);assert.match(c,/Secure/i);assert.match(c,/SameSite=strict/i);accountCookie=c.split(';')[0];
+    const state=await req('/api/workspace',undefined,accountCookie);
+    assert.equal(state.data.user.name,'First user');assert.equal(state.data.user.role,'member');assert.equal(state.data.workspace.tasks.length,0);
+    const row=(await inspection.execute("SELECT user_id,password_hash FROM accounts WHERE email='first@example.test'")).rows[0];accountId=String(row.user_id);
+    assert.notEqual(accountId,'owner');assert.match(row.password_hash,/^scrypt-v1\$/);assert.ok(!row.password_hash.includes(signup.password));
+    assert.equal((await req('/api/workspace',{action:'memory_add',memory:{label:'My note',value:'Keep this after signout',shareWithAI:false}},accountCookie)).r.status,200);
+  });
+  await t.test('email normalization and duplicate signup cannot replace an account',async()=>{
+    assert.equal((await req('/api/session',{...signup,email:' FIRST@EXAMPLE.TEST ',password:'another8',confirmPassword:'another8'},'')).r.status,409);
+    assert.equal((await req('/api/session',{action:'login',email:'first@example.test',password:'another8'},'')).r.status,401);
+  });
+  await t.test('wrong password and unknown email give the same response',async()=>{
+    const a=await req('/api/session',{action:'login',email:signup.email,password:'wrong123'},'');
+    const b=await req('/api/session',{action:'login',email:'absent@example.test',password:'wrong123'},'');
+    assert.equal(a.r.status,401);assert.equal(b.r.status,401);assert.deepEqual(a.data,b.data);
+  });
+  await t.test('a second account is isolated and gets its own password salt',async()=>{
+    const {r}=await req('/api/session',{...signup,email:'second@example.test',name:'Second user'},'');assert.equal(r.status,200);
+    const cookie=r.headers.get('set-cookie').split(';')[0];
+    assert.equal((await req('/api/workspace',undefined,cookie)).data.workspace.memories.length,0);
+    const rows=(await inspection.execute("SELECT password_hash FROM accounts WHERE email IN ('first@example.test','second@example.test')")).rows;
+    assert.notEqual(rows[0].password_hash,rows[1].password_hash);await signout(cookie);
+  });
+  await t.test('expired account sessions are cleaned without deleting saved data',async()=>{
+    await inspection.execute({sql:'UPDATE sessions SET expires_at=0 WHERE user_id=?',args:[accountId]});
+    const bundle=resolve(stateDir,'scheduler.cjs');
+    await build({entryPoints:['lib/scheduler.ts'],bundle:true,platform:'node',format:'cjs',packages:'external',outfile:bundle,logLevel:'silent'});
+    const result=spawnSync(process.execPath,['-e','require(process.argv[1]).scanReminders().then(()=>process.exit(0)).catch(()=>process.exit(1))',bundle],{env:serverEnv,encoding:'utf8',timeout:15000});
+    assert.equal(result.status,0,result.stderr);
+    assert.equal((await req('/api/workspace',undefined,accountCookie)).r.status,401);
+    assert.equal((await inspection.execute({sql:'SELECT COUNT(*) AS count FROM workspaces WHERE user_id=?',args:[accountId]})).rows[0].count,1);
+  });
+  await t.test('email/password restores workspace after restart and logout',async()=>{
+    await stopServer();server=startServer();await waitForServer();
+    const login=()=>req('/api/session',{action:'login',email:' FIRST@EXAMPLE.TEST ',password:signup.password},'');
+    const {r}=await login();assert.equal(r.status,200);accountCookie=r.headers.get('set-cookie').split(';')[0];
+    assert.equal((await req('/api/workspace',undefined,accountCookie)).data.workspace.memories[0].value,'Keep this after signout');
+    await signout(accountCookie);assert.equal((await req('/api/workspace',undefined,accountCookie)).r.status,401);
+    assert.equal((await login()).r.status,200);
+  });
+  await t.test('existing owner data requires the actual key and can be linked only once',async()=>{
+    const input={...signup,email:'owner-link@example.test',workspaceKey:'not-the-owner-key'};
+    assert.equal((await req('/api/session',input,'')).r.status,401);
+    const {r}=await req('/api/session',{...input,workspaceKey:ownerKey},'');assert.equal(r.status,200);
+    const cookie=r.headers.get('set-cookie').split(';')[0];
+    assert.equal((await req('/api/workspace',undefined,cookie)).data.workspace.receipts.length,1);
+    assert.equal((await req('/api/session',{...input,email:'takeover@example.test',workspaceKey:ownerKey},'')).r.status,409);
+  });
+  await t.test('concurrent signup cannot create duplicate email identities',async()=>{
+    const input={...signup,email:'race@example.test'};
+    const results=await Promise.all([req('/api/session',input,''),req('/api/session',input,'')]);
+    assert.deepEqual(results.map(x=>x.r.status).sort(),[200,409]);
+    assert.equal((await inspection.execute("SELECT COUNT(*) AS count FROM accounts WHERE email='race@example.test'")).rows[0].count,1);
+  });
+  await t.test('password guessing is rate limited by normalized email',async()=>{
+    for(let i=0;i<10;i++)assert.equal((await req('/api/session',{action:'login',email:'rate@example.test',password:'wrong123'},'')).r.status,401);
+    assert.equal((await req('/api/session',{action:'login',email:' RATE@EXAMPLE.TEST ',password:'wrong123'},'')).r.status,429);
+  });
+  await t.test('database authorization failure returns readable JSON instead of an empty response',async()=>{
+    const stub=createHttpServer((_req,res)=>{res.writeHead(401,{'Content-Type':'application/json'});res.end('{"error":"unauthorized"}');});
+    await new Promise(r=>stub.listen(0,'127.0.0.1',r));
+    try {
+      await stopServer();server=startServer({TURSO_DATABASE_URL:`http://127.0.0.1:${stub.address().port}`,TURSO_AUTH_TOKEN:'synthetic-invalid-token',REQUIRE_REMOTE_DB:'true'});await waitForServer('/login');
+      const {r,data}=await req('/api/session',{demo:true},'');
+      assert.equal(r.status,503);assert.match(r.headers.get('content-type'),/application\/json/);assert.match(data.error,/database/i);
+      assert.ok(!JSON.stringify(data).includes('synthetic-invalid-token'));
+    } finally { await stopServer();await new Promise(r=>stub.close(r)); }
   });
 });

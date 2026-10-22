@@ -13,7 +13,7 @@ export async function scanReminders() {
     }
     await db.batch([
       {sql:"DELETE FROM sessions WHERE expires_at<?",args:[Date.now()]},
-      "DELETE FROM workspaces WHERE user_id!='owner' AND user_id NOT IN (SELECT user_id FROM sessions)",
+      "DELETE FROM workspaces WHERE user_id!='owner' AND user_id NOT IN (SELECT user_id FROM accounts) AND user_id NOT IN (SELECT user_id FROM sessions)",
       "DELETE FROM automation_tokens WHERE user_id NOT IN (SELECT user_id FROM workspaces)",
       {sql:"DELETE FROM rate_limits WHERE reset_at<?",args:[Date.now()]}
     ],"write");

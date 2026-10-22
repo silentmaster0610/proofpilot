@@ -4,7 +4,7 @@
 
 Built for the **Best Apps and Agents** track of the Nebius × NVIDIA Global AI Hackathon. This version is a standalone Next.js app, ready for GitHub and a free Render web service. It no longer requires ChatGPT Sites authentication or Cloudflare D1.
 
-> Current status: the complete fictional sample workflow runs without an API key. The NVIDIA Nemotron 3 Super integration is implemented but **live inference is deferred and unverified**. A real Nebius run is still required for hackathon eligibility. The public repository is [silentmaster0610/proofpilot](https://github.com/silentmaster0610/proofpilot). Free Render deployment and a public demo video are in progress/pending.
+> Current status: the complete fictional sample workflow runs locally without an API key. The NVIDIA Nemotron 3 Super integration is implemented but **live inference is deferred and unverified**. A real Nebius run is still required for hackathon eligibility. The public repository is [silentmaster0610/proofpilot](https://github.com/silentmaster0610/proofpilot). The [free Render server](https://proofpilot-5ij0.onrender.com) has deployed successfully; database secret import and hosted workflow verification are pending. The public demo video is also pending.
 
 ## Run locally
 
@@ -16,9 +16,11 @@ npm run setup
 npm run dev
 ```
 
-Open [localhost:3000](http://127.0.0.1:3000). Select **Try the sample workspace**; no account or API key is needed. For your own documents and memories, open the generated, ignored `.env` file and copy `PROOFPILOT_OWNER_KEY` into the login form. Do not share the owner key or commit `.env`.
+Open [localhost:3000](http://127.0.0.1:3000). Choose **Create account**, enter a name, email and password of **8–128 characters**, and confirm the password. You are signed in immediately with your own saved workspace. Later, use **Sign in** with the same email/password. **Try the sample workspace** remains available without an account or API key.
 
-The setup command preserves existing environment files. Local data is stored in `data/proofpilot.sqlite` and initialized automatically. Back up that file when the app is stopped, or export your workspace from Settings. A sample session expires after one day; owner/judge sessions expire after 30 days. Owner data remains across sign-ins. Each judge/sample sign-in has a separate workspace; expired non-owner data is cleaned by the reminder scanner.
+The setup command preserves existing environment files. Local data is stored in `data/proofpilot.sqlite` and initialized automatically. Back up that file when the app is stopped, or export your workspace from Settings. A sample session expires after one day; account/owner/judge sessions expire after 30 days. Registered account data survives logout, session expiry and server restart. Only expired temporary judge/sample workspaces are cleaned by the reminder scanner.
+
+Already used an owner access key? Expand **Already have an owner workspace?** while creating your account and enter that key once to link the existing data. New accounts never inherit the shared owner workspace automatically. The separate existing-key sign-in option remains for older workspaces and judge invitations. Email is a login identifier; email verification and password recovery are not implemented yet.
 
 Production build and local preview:
 
@@ -41,7 +43,7 @@ The sample is deterministic. It never calls a model or silently substitutes for 
 
 ## What is implemented
 
-- Private owner workspace and isolated judge/sample sessions using random HttpOnly session cookies, hashed server-side tokens and origin checks.
+- Email/password accounts with salted scrypt password hashes, login throttling, private persistent workspaces, and isolated temporary judge/sample sessions. Random HttpOnly session cookies, hashed server-side tokens and origin checks protect access.
 - Document vault for pasted text and `.txt`, `.md`, `.eml` imports; saved preferences with individual cloud-sharing choices.
 - Warranty and reimbursement skills; only selected documents and opted-in memories reach the model.
 - NVIDIA Nemotron 3 Super adapter with schema, exact-quote and recipient checks, request metadata and explicit failure handling.
@@ -53,7 +55,7 @@ The sample is deterministic. It never calls a model or silently substitutes for 
 
 See [deployment guide](docs/DEPLOYMENT.md). `render.yaml` defines exactly one **free** web service; no paid disk, worker or database is provisioned. Durable remote storage uses a separately configured **Turso Free** database. Local SQLite must not be used for durable data on Render's ephemeral filesystem.
 
-The public GitHub repository and Turso Free database are available. Render deployment requires the database token. Set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` as private Render environment values. The Blueprint generates separate owner and judge keys. Keep the owner key private; give judges only the judge key if they need real-input access. The public sample requires no key.
+The public GitHub repository, Turso Free database and free Render service are available. The database credential must be correctly saved in Render's private environment. A local ignored `.env.render-upload` is prepared for the owner to import; it is not included in the public source or ZIP. The Blueprint also generates optional legacy owner/judge keys. New users create accounts on the login page and do not need either of those keys. The public sample requires no key.
 
 Free Render sleeps when idle. Reminder scans resume after wake-up; this is not an always-on service. Calendar reminders work independently after importing the `.ics` file. No keep-awake service or paid resource is configured.
 
@@ -81,13 +83,13 @@ Next.js dashboard -> session + origin checks -> versioned libSQL workspace
 
 - `lib/domain.ts`: data model, validation, sample fixture, email generation and hashes.
 - `lib/agent.ts`: model prompt, provider call, output checks and inference metadata.
-- `lib/auth.ts`: access keys, sessions and origin validation.
+- `lib/auth.ts`, `lib/password.ts`, `app/api/session/route.ts`: registration, password hashing, optional existing-workspace linking, sessions and origin validation.
 - `app/api/workspace/route.ts`: permission checks, transitions, optimistic concurrency and approval.
 - `db/index.ts`: automatic SQLite/libSQL schema initialization; local or Turso storage.
 - `lib/scheduler.ts`: due reminder scans and expired session cleanup.
 - `app/dashboard.tsx`, `app/design.css`: product interface and themes.
 
-No agent can directly send messages, browse arbitrary sites or run tools. Exact quoting establishes textual provenance, not factual correctness or claim eligibility. Receipts detect content changes; they are not independently signed or tamper-proof attestations. Hosting/database administrators can access stored data. This is a single-owner application with scoped judge/sample access, not a general multi-user account service.
+No agent can directly send messages, browse arbitrary sites or run tools. Exact quoting establishes textual provenance, not factual correctness or claim eligibility. Receipts detect content changes; they are not independently signed or tamper-proof attestations. Hosting/database administrators can access stored data. Each registered account has a separate workspace; there are no shared teams, email verification or password-recovery flows. Signup is limited to 20 attempts per hour per deployment, and password attempts to 10 per normalized email per 15 minutes.
 
 ## Verification
 

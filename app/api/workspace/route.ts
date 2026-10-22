@@ -33,7 +33,7 @@ export async function POST(req:Request) {
     if(!validOrigin(req))return response({error:"Invalid request origin."},403);
     const input=JSON.parse(raw);
     const {db,row,user,w}=await load();
-    if(user.role==="demo"&&!["seed","task_run","task_edit","task_approve","reminder_update","task_cancel"].includes(input.action))return response({error:"Sign in with an access key to use your own documents and memories."},403);
+    if(user.role==="demo"&&!["seed","task_run","task_edit","task_approve","reminder_update","task_cancel"].includes(input.action))return response({error:"Create an account or sign in to use your own documents and memories."},403);
     if(input.action==="automation_enable") {
       const token=`pp_${newId().replace(/-/g,"")}${newId().replace(/-/g,"")}`;
       const tokenHash=await sha256(token);
@@ -75,7 +75,7 @@ export async function POST(req:Request) {
         if(!docs.some(d=>d.kind==="invoice")||!docs.some(d=>d.kind==="policy")){t.status="needs_info";t.events.push(event("More evidence needed","Attach an invoice and policy before preparing the draft.","warning"));break;}
         if(t.mode==="live"&&input.consent!==true)throw new Error("Please consent to cloud processing before running live AI.");
         if(t.mode==="live") {
-          if(user.role==="demo")throw new Error("Sign in with an access key to use live AI.");
+          if(user.role==="demo")throw new Error("Sign in to use live AI.");
           const daily=Number(process.env.LIVE_DAILY_LIMIT||30);
           if(!await consumeLimit(`inference:${user.role}:${new Date().toISOString().slice(0,10)}`,daily,86400000))throw new Error("Live AI daily limit reached. Try again tomorrow.");
         }

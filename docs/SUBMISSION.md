@@ -8,11 +8,11 @@ Deadline from the official rules: **30 October 2026, 10:00 AM PDT / 10:30 PM IST
 
 | Requirement | Current status | Remaining action |
 | --- | --- | --- |
-| Working application | Local sample and independent Next.js implementation | Publish and verify the hosted build |
+| Working application | Local sample verified; free Render server deployed | Import database secret and verify the hosted workflow |
 | NVIDIA open-source model on Nebius | Nemotron 3 Super adapter implemented | API key/free credits and successful live run; deferred by owner |
 | Category | Best Apps and Agents recommended | Select it in Devpost |
 | Project description | English draft included | Add final links and verified live results |
-| Working demo URL | Local preview available | Free Render deployment and verification |
+| Working demo URL | [Render URL](https://proofpilot-5ij0.onrender.com) assigned and server deployed | Complete private configuration and end-to-end verification |
 | Public repository and open-source license | [Public GitHub repository](https://github.com/silentmaster0610/proofpilot), source, README and MIT license published | Complete |
 | Setup guidance | Updated README and deployment guide included | Verify from a fresh clone after publication |
 | Public YouTube video, maximum 3 minutes | 2:45 script included | Record real working version and upload publicly |
@@ -24,7 +24,7 @@ Deadline from the official rules: **30 October 2026, 10:00 AM PDT / 10:30 PM IST
 
 **A sample-only build is not yet eligible.** A real NVIDIA model call through Nebius Token Factory or NVIDIA model deployment on Nebius AI Cloud is mandatory. Render frontend hosting is compatible with using Token Factory for inference, but Render alone does not fulfill the Nebius requirement.
 
-GitHub and Turso sign-in are complete; the free database exists. The database token is ready; Render deployment remains pending browser access. No paid service has been created. Video recording/upload, live feedback, registration, eligibility declarations and final submission remain with the team.
+GitHub source is public, the free database exists, and the free Render server has deployed. A database authentication error in Render requires correcting its private token before hosted workflow verification. Browser access was denied, so that private field requires the owner's action. Email/password signup now supports passwords from eight characters and persistent, isolated accounts. No paid service has been created. Video recording/upload, live feedback, registration, eligibility declarations and final submission remain with the team.
 
 ## Product scope for judging
 
