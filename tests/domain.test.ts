@@ -2,6 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { emptyWorkspace,seedWorkspace,samplePlan,validateEvidence,approvalHash,eml,planSchema,sha256,processFollowups } from "../lib/domain";
 import { preparePlan } from "../lib/agent";
+import { normalizeDatabaseToken, tokenFormat } from "../lib/database-config";
+test("database token copy formats preserve the credential",()=>{
+  for(const value of ["fixture.token.signature", "  fixture.token.signature\n", '"fixture.token.signature"', "'fixture.token.signature'", 'TURSO_AUTH_TOKEN="fixture.token.signature"'])assert.equal(normalizeDatabaseToken(value),"fixture.token.signature");
+  assert.equal(normalizeDatabaseToken("opaque-token"),"opaque-token");
+  assert.equal(normalizeDatabaseToken("   "),undefined);
+});
+test("database diagnostics report only a format label",()=>{
+  assert.equal(tokenFormat(),"missing");assert.equal(tokenFormat("fixture.token.signature"),"jwt");assert.equal(tokenFormat("a\nb"),"multiple_lines");assert.equal(tokenFormat("opaque-token"),"unrecognized");
+});
 function fixture() {const w=emptyWorkspace();seedWorkspace(w);const t=w.tasks[0];t.plan=samplePlan(t,w.documents);return {w,t};}
 test("sample seeds once and uses only fictional documents",()=>{const {w}=fixture();seedWorkspace(w);assert.equal(w.tasks.length,1);assert.equal(w.documents.length,2);assert.ok(w.documents.every(d=>d.sample));});
 test("sample claims contain verifiable source quotes",()=>{const {w,t}=fixture();validateEvidence(t.plan!,w.documents);assert.equal(t.plan!.missing.length,0);});

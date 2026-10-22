@@ -2,7 +2,7 @@
 
 - Next.js production webpack build: passed (Next.js 16.3.4, Node.js 24.19.0).
 - TypeScript check and Git whitespace checks: passed.
-- Domain tests: **17 passed**. Exact source quoting, unselected evidence, recipient checks, header injection, approval fingerprints, UTF-8 email drafts, sample/live separation, mocked provider errors and idempotent follow-ups.
+- Domain/configuration tests: **19 passed**. Exact source quoting, unselected evidence, recipient checks, header injection, approval fingerprints, UTF-8 email drafts, sample/live separation, mocked provider errors, idempotent follow-ups, credential copy-format handling and non-sensitive diagnostic labels.
 - Production-server integration: **25 scenarios passed** (26 tests including the parent suite). Uses an isolated SQLite database, generated credentials and no provider key. Covers the evidence/approval workflow plus signup with exactly eight characters, invalid credentials, salted password storage, normalized emails, concurrent duplicate signup, private account isolation, account persistence after session expiry/cleanup/restart, authenticated linking of existing owner data, login throttling and a mocked remote database 401 returning readable JSON.
 - Render Blueprint: passes the current official JSON Schema using Ajv 2020-12. Contains one free web service, no disk/paid database and no mandatory Nebius key. The authenticated Render CLI validation requires a separate CLI login; it was not completed.
 - Build tooling: early Windows sandbox directory errors and a Turbopack child-process failure occurred. After granting generated-build/network access, the final webpack build passed. Local development and production scripts explicitly use webpack.

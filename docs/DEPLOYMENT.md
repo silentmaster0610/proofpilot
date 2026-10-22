@@ -47,6 +47,8 @@ Set `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `REQUIRE_REMOTE_DB=true`, `FOLLOWU
 
 On 22 October, Render logs showed libSQL HTTP 401 during sign-in. A read-only `SELECT 1` using the privately saved Turso token succeeded, isolating the problem to the deployed database configuration. Copy only the token value (without `TURSO_AUTH_TOKEN=`) into Render's environment field and choose **Save and deploy**. The locally ignored `.env.turso-token.txt` contains just that verified token for easy copying. Never commit it or paste it into chat. The new sign-in handler returns a readable JSON error when storage is unavailable, and the page handles empty upstream responses.
 
+The server tolerates surrounding whitespace, matching quotes and a single `TURSO_AUTH_TOKEN=` assignment prefix. Startup logs report only the token format (`missing`, `multiple_lines`, `jwt` or `unrecognized`) and the connection result; no token, URL, payload or credential digest is logged. `ProofPilot database connected; schema ready.` confirms the deployed server has reached the database and initialized its schema.
+
 Leave `NEBIUS_API_KEY` unset for this sample-only release. The Blueprint intentionally does not require it. The model default is configured for later use. Render supplies `RENDER_EXTERNAL_URL`; set `APP_URL` only when using a different canonical domain.
 
 ## 4. Verify before sharing
