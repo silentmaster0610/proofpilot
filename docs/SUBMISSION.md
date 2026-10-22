@@ -13,7 +13,7 @@ Deadline from the official rules: **30 October 2026, 10:00 AM PDT / 10:30 PM IST
 | Category | Best Apps and Agents recommended | Select it in Devpost |
 | Project description | English draft included | Add final links and verified live results |
 | Working demo URL | Local preview available | Free Render deployment and verification |
-| Public repository and open-source license | [GitHub repository](https://github.com/silentmaster0610/proofpilot) created; MIT and source upload in progress | Verify final public contents |
+| Public repository and open-source license | [Public GitHub repository](https://github.com/silentmaster0610/proofpilot), source, README and MIT license published | Complete |
 | Setup guidance | Updated README and deployment guide included | Verify from a fresh clone after publication |
 | Public YouTube video, maximum 3 minutes | 2:45 script included | Record real working version and upload publicly |
 | Platform/model feedback | Evidence template included | Write feedback after actual Nebius use |
@@ -24,7 +24,7 @@ Deadline from the official rules: **30 October 2026, 10:00 AM PDT / 10:30 PM IST
 
 **A sample-only build is not yet eligible.** A real NVIDIA model call through Nebius Token Factory or NVIDIA model deployment on Nebius AI Cloud is mandatory. Render frontend hosting is compatible with using Token Factory for inference, but Render alone does not fulfill the Nebius requirement.
 
-GitHub and Turso sign-in are complete; the free database exists. Database-token authorization and Render deployment are in progress. No paid service has been created. Video recording/upload, live feedback, registration, eligibility declarations and final submission remain with the team.
+GitHub and Turso sign-in are complete; the free database exists. The database token is ready; Render deployment remains pending browser access. No paid service has been created. Video recording/upload, live feedback, registration, eligibility declarations and final submission remain with the team.
 
 ## Product scope for judging
 
