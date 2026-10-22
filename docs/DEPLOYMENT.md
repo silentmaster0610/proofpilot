@@ -49,6 +49,10 @@ On 22 October, Render logs showed libSQL HTTP 401 during sign-in. A read-only `S
 
 The server tolerates surrounding whitespace, matching quotes and a single `TURSO_AUTH_TOKEN=` assignment prefix. Startup logs report only the token format (`missing`, `multiple_lines`, `jwt` or `unrecognized`) and the connection result; no token, URL, payload or credential digest is logged. `ProofPilot database connected; schema ready.` confirms the deployed server has reached the database and initialized its schema.
 
+### Using an existing Render Secret File
+
+Secret Files are mounted files; their contents do not automatically become environment variables. For this service, the owner confirmed the filename is `proofpilot`. Set the non-sensitive environment variable `TURSO_AUTH_TOKEN_FILE=/etc/secrets/proofpilot` and deploy. The app reads exactly that configured file, without scanning other files. It accepts a raw token, a dotenv file containing `TURSO_AUTH_TOKEN`, or the prepared JSON form containing `tursoAuthToken`. It reads only the database token, not other credentials in the file. A non-empty `TURSO_AUTH_TOKEN` environment value takes precedence. Missing, unreadable, oversized or malformed files fail closed with a sanitized error. See [Render Secret Files](https://render.com/docs/configure-environment-variables#secret-files).
+
 Leave `NEBIUS_API_KEY` unset for this sample-only release. The Blueprint intentionally does not require it. The model default is configured for later use. Render supplies `RENDER_EXTERNAL_URL`; set `APP_URL` only when using a different canonical domain.
 
 ## 4. Verify before sharing

@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import * as schema from "./schema";
-import { normalizeDatabaseToken, tokenFormat } from "../lib/database-config";
+import { loadDatabaseToken, tokenFormat } from "../lib/database-config";
 let client: Client | undefined;
 let ready: Promise<void> | undefined;
 let configurationReported = false;
@@ -11,11 +11,17 @@ export async function getClient() {
   if (ready) { await ready; return client!; }
   const path = resolve(process.env.DATABASE_PATH || "./data/proofpilot.sqlite");
   const remote=process.env.TURSO_DATABASE_URL?.trim();
-  const authToken=remote?normalizeDatabaseToken(process.env.TURSO_AUTH_TOKEN):undefined;
+  let credential: ReturnType<typeof loadDatabaseToken> = {token:undefined,source:"missing"};
+  if(remote){
+    try { credential=loadDatabaseToken(process.env.TURSO_AUTH_TOKEN,process.env.TURSO_AUTH_TOKEN_FILE); }
+    catch { console.error("ProofPilot database secret file unavailable or invalid.");throw new Error("Remote database secret file is unavailable or invalid."); }
+  }
+  const authToken=credential.token;
   if(remote&&!configurationReported){
     configurationReported=true;
     // Only a format label is logged: never the token, URL, payload or a digest.
     console.info(`ProofPilot database token configuration: ${tokenFormat(authToken)}`);
+    console.info(`ProofPilot database credential source: ${credential.source}`);
   }
   if(process.env.REQUIRE_REMOTE_DB==="true"&&!remote)throw new Error("Remote database configuration is required.");
   if(!remote)mkdirSync(dirname(path), { recursive: true });

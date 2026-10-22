@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { emptyWorkspace,seedWorkspace,samplePlan,validateEvidence,approvalHash,eml,planSchema,sha256,processFollowups } from "../lib/domain";
 import { preparePlan } from "../lib/agent";
-import { normalizeDatabaseToken, tokenFormat } from "../lib/database-config";
+import { normalizeDatabaseToken, tokenFormat, parseDatabaseTokenFile, loadDatabaseToken } from "../lib/database-config";
 test("database token copy formats preserve the credential",()=>{
   for(const value of ["fixture.token.signature", "  fixture.token.signature\n", '"fixture.token.signature"', "'fixture.token.signature'", 'TURSO_AUTH_TOKEN="fixture.token.signature"'])assert.equal(normalizeDatabaseToken(value),"fixture.token.signature");
   assert.equal(normalizeDatabaseToken("opaque-token"),"opaque-token");
@@ -10,6 +10,20 @@ test("database token copy formats preserve the credential",()=>{
 });
 test("database diagnostics report only a format label",()=>{
   assert.equal(tokenFormat(),"missing");assert.equal(tokenFormat("fixture.token.signature"),"jwt");assert.equal(tokenFormat("a\nb"),"multiple_lines");assert.equal(tokenFormat("opaque-token"),"unrecognized");
+});
+test("secret files accept raw tokens, dotenv entries and staged JSON",()=>{
+  const token="fixture.token.signature";
+  for(const value of [token,`# private configuration\nTURSO_DATABASE_URL=libsql://fixture.test\nTURSO_AUTH_TOKEN="${token}"\nOTHER_KEY=ignored`,JSON.stringify({tursoAuthToken:token}),JSON.stringify({TURSO_AUTH_TOKEN:token})])assert.equal(parseDatabaseTokenFile(value),token);
+});
+test("invalid secret file content is rejected without exposing it",()=>{
+  for(const value of ["", "OTHER_KEY=private-value", '{"tursoAuthToken":123}', '{"tursoAuthToken":', "private-value\nsecond-line"]) {
+    assert.throws(()=>parseDatabaseTokenFile(value),error=>error instanceof Error&&/Database secret file/.test(error.message)&&!error.message.includes("private-value"));
+  }
+});
+test("an explicit environment credential takes precedence and missing files fail closed",()=>{
+  assert.deepEqual(loadDatabaseToken("fixture.token.signature","relative-nonexistent"),{token:"fixture.token.signature",source:"environment"});
+  assert.deepEqual(loadDatabaseToken(""),{token:undefined,source:"missing"});
+  assert.throws(()=>loadDatabaseToken("","relative-nonexistent"),/path must be absolute/);
 });
 function fixture() {const w=emptyWorkspace();seedWorkspace(w);const t=w.tasks[0];t.plan=samplePlan(t,w.documents);return {w,t};}
 test("sample seeds once and uses only fictional documents",()=>{const {w}=fixture();seedWorkspace(w);assert.equal(w.tasks.length,1);assert.equal(w.documents.length,2);assert.ok(w.documents.every(d=>d.sample));});

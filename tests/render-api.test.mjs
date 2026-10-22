@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
-import {mkdir,rm} from 'node:fs/promises';
+import {mkdir,rm,writeFile} from 'node:fs/promises';
 import {resolve,relative,isAbsolute} from 'node:path';
 import {createServer} from 'node:net';
 import {createServer as createHttpServer} from 'node:http';
@@ -12,7 +12,7 @@ const port=await new Promise(resolve=>{const s=createServer();s.listen(0,'127.0.
 const base=`http://127.0.0.1:${port}`,ownerKey=randomBytes(32).toString('hex');
 const stateDir=resolve('.test-state',crypto.randomUUID());
 await mkdir(stateDir,{recursive:true});
-const serverEnv={...process.env,APP_URL:base,DATABASE_PATH:resolve(stateDir,'qa.sqlite'),TURSO_DATABASE_URL:'',TURSO_AUTH_TOKEN:'',REQUIRE_REMOTE_DB:'false',NEBIUS_API_KEY:'',PROOFPILOT_OWNER_KEY:ownerKey,PROOFPILOT_JUDGE_KEY:'',FOLLOWUP_SCANNER:'false',NEXT_TELEMETRY_DISABLED:'1'};
+const serverEnv={...process.env,APP_URL:base,DATABASE_PATH:resolve(stateDir,'qa.sqlite'),TURSO_DATABASE_URL:'',TURSO_AUTH_TOKEN:'',TURSO_AUTH_TOKEN_FILE:'',REQUIRE_REMOTE_DB:'false',NEBIUS_API_KEY:'',PROOFPILOT_OWNER_KEY:ownerKey,PROOFPILOT_JUDGE_KEY:'',FOLLOWUP_SCANNER:'false',NEXT_TELEMETRY_DISABLED:'1'};
 let logs='';
 function startServer(overrides={}) {
   const child=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{env:{...serverEnv,...overrides},stdio:['ignore','pipe','pipe']});
@@ -182,6 +182,18 @@ test('Render server: sessions, evidence and approvals',async t=>{
       const {r,data}=await req('/api/session',{demo:true},'');
       assert.equal(r.status,503);assert.match(r.headers.get('content-type'),/application\/json/);assert.match(data.error,/database/i);
       assert.ok(!JSON.stringify(data).includes('synthetic-invalid-token'));
+    } finally { await stopServer();await new Promise(r=>stub.close(r)); }
+  });
+  await t.test('production server reads its configured secret file without logging its token',async()=>{
+    const token='synthetic.secretfile.credential',file=resolve(stateDir,'private-token');
+    await writeFile(file,`# synthetic test secret\nTURSO_AUTH_TOKEN=${token}\n`,{mode:0o600});
+    let authorization;
+    const stub=createHttpServer((request,res)=>{authorization=request.headers.authorization;res.writeHead(401,{'Content-Type':'application/json'});res.end('{"error":"unauthorized"}');});
+    await new Promise(r=>stub.listen(0,'127.0.0.1',r));
+    try {
+      server=startServer({TURSO_DATABASE_URL:`http://127.0.0.1:${stub.address().port}`,TURSO_AUTH_TOKEN_FILE:file,REQUIRE_REMOTE_DB:'true'});await waitForServer('/login');
+      assert.equal((await req('/api/session',{demo:true},'')).r.status,503);
+      assert.equal(authorization,`Bearer ${token}`);assert.ok(!logs.includes(token));assert.match(logs,/credential source: secret_file/);
     } finally { await stopServer();await new Promise(r=>stub.close(r)); }
   });
 });
