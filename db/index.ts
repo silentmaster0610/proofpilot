@@ -1,0 +1,33 @@
+import { createClient, Client } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import * as schema from "./schema";
+let client: Client | undefined;
+let ready: Promise<void> | undefined;
+export async function getClient() {
+  if (ready) { await ready; return client!; }
+  const path = resolve(process.env.DATABASE_PATH || "./data/proofpilot.sqlite");
+  const remote=process.env.TURSO_DATABASE_URL;
+  if(process.env.REQUIRE_REMOTE_DB==="true"&&!remote)throw new Error("Remote database configuration is required.");
+  if(!remote)mkdirSync(dirname(path), { recursive: true });
+  client=createClient({url:remote||`file:${path.replace(/\\/g,"/")}`,authToken:remote?process.env.TURSO_AUTH_TOKEN:undefined});
+  ready = client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS workspaces (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS automation_tokens (user_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, role TEXT NOT NULL, expires_at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
+  `).catch(e=>{ready=undefined;client?.close();client=undefined;throw e;});
+  await ready;
+  return client!;
+}
+export async function getDb() { return drizzle(await getClient(), { schema }); }
+export async function consumeLimit(key: string, limit: number, windowMs: number) {
+  const db = await getClient(), at = Date.now();
+  const result = await db.execute({sql:`INSERT INTO rate_limits(key,count,reset_at) VALUES(?,1,?)
+    ON CONFLICT(key) DO UPDATE SET count=CASE WHEN reset_at<=? THEN 1 ELSE count+1 END,
+    reset_at=CASE WHEN reset_at<=? THEN excluded.reset_at ELSE reset_at END
+    RETURNING count`,args:[key, at + windowMs, at, at]});
+  return Number(result.rows[0].count) <= limit;
+}

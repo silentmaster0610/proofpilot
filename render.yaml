@@ -1,0 +1,30 @@
+# Free web hosting with a separate Turso Free database.
+# Free Render instances sleep when idle; do not claim always-on processing.
+services:
+  - type: web
+    name: proofpilot
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: REQUIRE_REMOTE_DB
+        value: "true"
+      - key: FOLLOWUP_SCANNER
+        value: "true"
+      - key: NEBIUS_MODEL
+        value: nvidia/nemotron-3-super-120b-a12b
+      - key: LIVE_DAILY_LIMIT
+        value: "30"
+      - key: PROOFPILOT_OWNER_KEY
+        generateValue: true
+      - key: PROOFPILOT_JUDGE_KEY
+        generateValue: true
